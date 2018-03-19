@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -343,7 +344,7 @@ func decodeJobSection(df DatabaseFlavor, section goini.RawSection, basedir strin
 	}
 
 	if jp.queryArgsFile != nil {
-		job.QueryArgs = csv.NewReader(jp.queryArgsFile)
+		job.QueryArgs = csv.NewReader(bufio.NewReader(jp.queryArgsFile))
 		if jp.queryArgsDelim != 0 {
 			job.QueryArgs.Comma = jp.queryArgsDelim
 		}

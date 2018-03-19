@@ -73,7 +73,7 @@ func runTest(db Database, config *Config) {
 	}
 }
 
-var driverName = flag.String("driver", "mysql", "Database driver to use.")
+var driverName = flag.String("driver", "cockroach", "Database driver to use.")
 var baseDir = flag.String("base-dir", "",
 	"Directory to use as base for files (default directory containing runfile).")
 
@@ -94,6 +94,14 @@ func init() {
 		"Database connection database")
 	flag.StringVar(&GlobalConfig.Params, "params", "",
 		"Override default connection parameters")
+	flag.StringVar(&GlobalConfig.sslmode, "sslmode", "",
+		"Whether or not to use SS")
+	flag.StringVar(&GlobalConfig.sslcert, "sslcert", "",
+		"Cert file location. The file must contain PEM encoded data")
+	flag.StringVar(&GlobalConfig.sslkey, "sslkey", "",
+		"Key file location. The file must contain PEM encoded data")
+	flag.StringVar(&GlobalConfig.sslrootcert, "sslrootcert", "",
+		"The location of the root certificate file. The file must contain PEM encoded data")
 }
 
 func main() {

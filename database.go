@@ -57,12 +57,16 @@ var EmptyQueryError = errors.New("empty query found")
  * field is zero, no user preference was provided.
  */
 type ConnectionConfig struct {
-	Username string
-	Password string
-	Host     string
-	Port     int
-	Database string
-	Params   string
+	Username    string
+	Password    string
+	Host        string
+	Port        int
+	Database    string
+	Params      string
+	sslmode     string
+	sslcert     string
+	sslkey      string
+	sslrootcert string
 }
 
 /*
@@ -89,7 +93,8 @@ type Database interface {
 }
 
 var supportedDatabaseFlavors = map[string]DatabaseFlavor{
-	"mysql":    &sqlDatabaseFlavor{"mysql", mySQLDataSourceName, checkSQLQuery},
-	"mssql":    &sqlDatabaseFlavor{"mssql", sqlServerDataSourceName, checkSQLQuery},
-	"postgres": &sqlDatabaseFlavor{"postgres", postgresDataSourceName, checkSQLQuery},
+	"mysql":     &sqlDatabaseFlavor{"mysql", "mysql", mySQLDataSourceName, checkSQLQuery},
+	"mssql":     &sqlDatabaseFlavor{"mssql", "mssql", sqlServerDataSourceName, checkSQLQuery},
+	"postgres":  &sqlDatabaseFlavor{"postgres", "postgres", postgresDataSourceName, checkSQLQuery},
+	"cockroach": &sqlDatabaseFlavor{"cockroach", "postgres", cockroachDataSourceName, cockroachCheckSQLQuery},
 }

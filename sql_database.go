@@ -94,32 +94,41 @@ func (s *sqlDb) countQueryRows(w *SafeCSVWriter, q string, args []interface{}) (
 	var rowsAffected int64
 	var ro *rowOutputter
 
-	if w != nil {
-		if ro, err = makeRowOutputter(w, rows); err != nil {
-			return 0, err
-		}
-	}
-
-	for rows.Next() {
+	for {
 		if w != nil {
-			if err = ro.outputRows(rows); err != nil {
+			if ro, err = makeRowOutputter(w, rows); err != nil {
 				return 0, err
 			}
 		}
-		rowsAffected++
-	}
-	if err = rows.Err(); err != nil {
-		return 0, err
-	}
 
-	if w != nil {
-		w.Flush()
-		err = w.Error()
-		if err != nil {
+		for rows.Next() {
+			if w != nil {
+				if err = ro.outputRows(rows); err != nil {
+					return 0, err
+				}
+			}
+			rowsAffected++
+		}
+		if err = rows.Err(); err != nil {
 			return 0, err
 		}
-	}
 
+		if w != nil {
+			w.Flush()
+			err = w.Error()
+			if err != nil {
+				return 0, err
+			}
+		}
+
+		// continue if there are more result set
+		if rows.NextResultSet() {
+			continue
+		} else {
+			break
+		}
+
+	}
 	return rowsAffected, nil
 }
 
@@ -136,9 +145,10 @@ func (s *sqlDb) Close() {
 }
 
 type sqlDatabaseFlavor struct {
-	name      string
-	dsnFunc   func(cc *ConnectionConfig) string
-	checkFunc func(q string) error
+	name       string
+	driverName string
+	dsnFunc    func(cc *ConnectionConfig) string
+	checkFunc  func(q string) error
 }
 
 var maxIdleConns = flag.Int("max-idle-conns", 100, "Maximum idle database connections")
@@ -152,7 +162,7 @@ func (sq *sqlDatabaseFlavor) Connect(cc *ConnectionConfig) (Database, error) {
 	dsn := sq.dsnFunc(cc)
 	log.Println("Connecting to", dsn)
 
-	db, err := sql.Open(sq.name, dsn)
+	db, err := sql.Open(sq.driverName, dsn)
 	if err != nil {
 		return nil, err
 	}
@@ -203,6 +213,23 @@ func checkSQLQuery(q string) error {
 	return nil
 }
 
+func cockroachCheckSQLQuery(q string) error {
+	query := strings.TrimSpace(q)
+	if len(query) == 0 {
+		return EmptyQueryError
+	}
+	// if strings.Contains(query, ";") {
+	// 		return errors.New("cannot have a semicolon")
+	// }
+
+	switch strings.ToLower(strings.Fields(query)[0]) {
+	case "begin":
+		return errors.New("cannot use transactions")
+	case "use":
+		return errors.New("cannot change database")
+	}
+	return nil
+}
 func mySQLDataSourceName(cc *ConnectionConfig) string {
 	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s",
 		firstString(cc.Username, "root"),
@@ -219,6 +246,16 @@ func postgresDataSourceName(cc *ConnectionConfig) string {
 		firstString(cc.Password, ""),
 		firstString(cc.Host, "localhost"),
 		firstInt(cc.Port, 5432),
+		firstString(cc.Database, ""),
+		firstString(cc.Params, "sslmode=disable"))
+}
+
+func cockroachDataSourceName(cc *ConnectionConfig) string {
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?%s",
+		firstString(cc.Username, "root"),
+		firstString(cc.Password, ""),
+		firstString(cc.Host, "localhost"),
+		firstInt(cc.Port, 26257),
 		firstString(cc.Database, ""),
 		firstString(cc.Params, "sslmode=disable"))
 }
