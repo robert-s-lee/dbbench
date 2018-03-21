@@ -140,7 +140,8 @@ type jobParser struct {
 	j                 *Job
 	df                DatabaseFlavor
 	basedir           string
-	queryArgsFile     io.Reader
+	queryArgsFile     *os.File // io.Reader
+	queryArgsLoop     bool
 	queryArgsDelim    rune
 	multiQueryAllowed bool
 }
@@ -200,6 +201,20 @@ var jobOptions = goini.DecodeOptionSet{
 				v = filepath.Join(jp.basedir, v)
 			}
 			jp.queryArgsFile, err = os.Open(v)
+			jp.queryArgsLoop = false
+			return err
+		},
+	},
+	"query-args-loop": &goini.DecodeOption{Kind: goini.UniqueOption,
+		Usage: "File loop containing csv delimited query args, one line per " +
+			"query.",
+		Parse: func(v string, jpi interface{}) (err error) {
+			jp := jpi.(*jobParser)
+			if !filepath.IsAbs(v) {
+				v = filepath.Join(jp.basedir, v)
+			}
+			jp.queryArgsFile, err = os.Open(v)
+			jp.queryArgsLoop = true
 			return err
 		},
 	},
@@ -344,7 +359,10 @@ func decodeJobSection(df DatabaseFlavor, section goini.RawSection, basedir strin
 	}
 
 	if jp.queryArgsFile != nil {
-		job.QueryArgs = csv.NewReader(bufio.NewReader(jp.queryArgsFile))
+		job.QueryArgsLoop = jp.queryArgsLoop
+		job.QueryArgsReader = jp.queryArgsFile
+		job.QueryArgsBufReader = bufio.NewReader(jp.queryArgsFile)
+		job.QueryArgs = csv.NewReader(job.QueryArgsBufReader)
 		if jp.queryArgsDelim != 0 {
 			job.QueryArgs.Comma = jp.queryArgsDelim
 		}

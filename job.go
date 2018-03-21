@@ -22,6 +22,7 @@ import (
 	"golang.org/x/net/context"
 	"io"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -47,9 +48,12 @@ type Job struct {
 	Count      uint64
 	BatchSize  uint64
 
-	QueryLog     io.ReadCloser
-	QueryArgs    *csv.Reader
-	QueryResults *SafeCSVWriter
+	QueryLog           io.ReadCloser
+	QueryArgsLoop      bool
+	QueryArgsReader    *os.File
+	QueryArgsBufReader *bufio.Reader
+	QueryArgs          *csv.Reader
+	QueryResults       *SafeCSVWriter
 
 	Start time.Duration
 	Stop  time.Duration
@@ -94,20 +98,29 @@ func (job *Job) getNextQueryArgs() ([]interface{}, error) {
 		return nil, nil
 	}
 
-	textArgs, err := job.QueryArgs.Read()
-	if err != nil {
-		if err != io.EOF {
-			// TODO(awreece) Avoid log.Fatal.
-			log.Fatalf("error parsing arg file for job %s: %v", job.Name, err)
-		}
-		return nil, err
+	var textArgs []string
+	var err error
+
+	textArgs, err = job.QueryArgs.Read()
+	if err == io.EOF && job.QueryArgsLoop == true {
+		// go back to beginning if reached EOF
+		job.QueryArgsReader.Seek(0, os.SEEK_SET)
+		job.QueryArgsBufReader.Reset(job.QueryArgsReader)
+		textArgs, err = job.QueryArgs.Read()
 	}
 
-	iargs := make([]interface{}, 0, len(textArgs))
-	for _, arg := range textArgs {
-		iargs = append(iargs, arg)
+	if err == nil {
+		iargs := make([]interface{}, 0, len(textArgs))
+		for _, arg := range textArgs {
+			iargs = append(iargs, arg)
+		}
+		return iargs, nil
+	} else if err == io.EOF {
+		return nil, err
+	} else {
+		log.Fatalf("error parsing arg file for job %s: %v", job.Name, err)
+		return nil, err
 	}
-	return iargs, nil
 }
 
 func (job *Job) getNextJobInvocation() (*jobInvocation, error) {
